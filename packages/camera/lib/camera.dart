@@ -307,8 +307,13 @@ class CameraController extends ValueNotifier<CameraValue> {
   /// This operation is a no-op on Android.
   ///
   /// Throws a [CameraException] if the prepare fails.
-  Future<void> prepareForVideoRecording() async {
-    await _channel.invokeMethod<void>('prepareForVideoRecording');
+  Future<void> prepareForVideoRecording({String filePath}) async {
+    await _channel.invokeMethod<void>(
+      'prepareForVideoRecording',
+      <String, dynamic>{
+        'filePath': filePath,
+      },
+    );
   }
 
   /// Listen to events from the native plugins.
