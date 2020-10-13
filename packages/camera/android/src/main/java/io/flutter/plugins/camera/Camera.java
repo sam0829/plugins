@@ -61,6 +61,7 @@ public class Camera {
   private CamcorderProfile recordingProfile;
   private int currentOrientation = ORIENTATION_UNKNOWN;
   private boolean mIsPrepared = false;
+  private boolean mOptimizeForVideoRecording = false;
 
   // Mirrors camera.dart
   public enum ResolutionPreset {
@@ -78,7 +79,8 @@ public class Camera {
           final DartMessenger dartMessenger,
           final String cameraName,
           final String resolutionPreset,
-          final boolean enableAudio)
+          final boolean enableAudio,
+          final boolean optimizeForVideoRecording)
           throws CameraAccessException {
     if (activity == null) {
       throw new IllegalStateException("No activity available!");
@@ -86,6 +88,7 @@ public class Camera {
 
     this.cameraName = cameraName;
     this.enableAudio = enableAudio;
+    mOptimizeForVideoRecording = optimizeForVideoRecording;
     this.flutterTexture = flutterTexture;
     this.dartMessenger = dartMessenger;
     this.cameraManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
@@ -117,12 +120,8 @@ public class Camera {
     previewSize = computeBestPreviewSize(cameraName, preset);
   }
 
-  public  void prepareForVideoRecording() {
-
-  }
-
   public void prepareMediaRecorder(String outputFilePath) throws IOException {
-    if (mIsPrepared) return;
+    if (mOptimizeForVideoRecording && mIsPrepared) return;
     if (mediaRecorder != null) {
       mediaRecorder.release();
     }
@@ -144,10 +143,12 @@ public class Camera {
     mediaRecorder.setAudioEncodingBitRate(recordingProfile.audioBitRate);
     mediaRecorder.prepare();
     mIsPrepared = true;
-    try {
-      startPreview();
-    } catch (CameraAccessException e) {
-      e.printStackTrace();
+    if (mOptimizeForVideoRecording) {
+      try {
+        startPreview();
+      } catch (CameraAccessException e) {
+        e.printStackTrace();
+      }
     }
   }
 
@@ -168,13 +169,15 @@ public class Camera {
               @Override
               public void onOpened(@NonNull CameraDevice device) {
                 cameraDevice = device;
-            /*try {
-              startPreview();
-            } catch (CameraAccessException e) {
-              result.error("CameraAccess", e.getMessage(), null);
-              close();
-              return;
-            }*/
+                if (!mOptimizeForVideoRecording) {
+                  try {
+                    startPreview();
+                  } catch (CameraAccessException e) {
+                    result.error("CameraAccess", e.getMessage(), null);
+                    close();
+                    return;
+                  }
+                }
                 Map<String, Object> reply = new HashMap<>();
                 reply.put("textureId", flutterTexture.id());
                 reply.put("previewWidth", previewSize.getWidth());
@@ -383,7 +386,8 @@ public class Camera {
       recordingVideo = false;
       mediaRecorder.stop();
       mediaRecorder.reset();
-      //startPreview();
+      if (!mOptimizeForVideoRecording)
+        startPreview();
       mIsPrepared = false;
       result.success(null);
     } catch (Exception e) {
@@ -436,7 +440,10 @@ public class Camera {
   }
 
   public void startPreview() throws CameraAccessException {
-    createCaptureSession(CameraDevice.TEMPLATE_RECORD, mediaRecorder.getSurface());
+    if (mOptimizeForVideoRecording)
+      createCaptureSession(CameraDevice.TEMPLATE_RECORD, mediaRecorder.getSurface());
+    else
+      createCaptureSession(CameraDevice.TEMPLATE_PREVIEW, pictureImageReader.getSurface());
   }
 
   public void startPreviewWithImageStream(EventChannel imageStreamChannel)
